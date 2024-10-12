@@ -1,40 +1,17 @@
 import os
 import json
 import fnmatch
+import argparse
 from pathlib import Path
 
 
 def load_gitignore(root_dir):
     gitignore_path = os.path.join(root_dir, '.gitignore')
     patterns = [
-        '__pycache__',
-        '*.pyc',
-        '*.pyo',
-        '*.pyd',
-        '.Python',
-        'build',
-        'develop-eggs',
-        'dist',
-        'downloads',
-        'eggs',
-        '.eggs',
-        'lib',
-        'lib64',
-        'parts',
-        'sdist',
-        'var',
-        '*.egg-info',
-        '.installed.cfg',
-        '*.egg',
-        '*.manifest',
-        '*.spec',
-        'pip-log.txt',
-        'pip-delete-this-directory.txt',
-        '.venv',
-        'venv',
-        'ENV',
-        'env',
-        '.env'
+        '__pycache__', '*.pyc', '*.pyo', '*.pyd', '.Python', 'build', 'develop-eggs', 'dist',
+        'downloads', 'eggs', '.eggs', 'lib', 'lib64', 'parts', 'sdist', 'var', '*.egg-info',
+        '.installed.cfg', '*.egg', '*.manifest', '*.spec', 'pip-log.txt',
+        'pip-delete-this-directory.txt', '.venv', 'venv', 'ENV', 'env', '.env'
     ]
 
     if os.path.exists(gitignore_path):
@@ -65,29 +42,25 @@ def save_state(state_file, state):
         json.dump(state, f, indent=2)
 
 
-def select_files(root_dir, gitignore_patterns, existing_state):
+def select_files(root_dir, gitignore_patterns, existing_state, state_file, script_name):
     selected_files = existing_state.get('selected_files', {})
+    new_files = []
+
     for root, dirs, files in os.walk(root_dir, topdown=True):
         rel_path = os.path.relpath(root, root_dir)
         if rel_path == '.':
             rel_path = ''
 
-        if is_ignored(rel_path, gitignore_patterns) or rel_path in existing_state.get('omitted_dirs', []):
-            dirs[:] = []
-            continue
-
-        if rel_path not in existing_state.get('processed_dirs', []):
-            print(f"\nCurrent directory: {rel_path}")
-            include_dir = input(f"Include files from {rel_path or 'root directory'}? (y/n): ").lower() == 'y'
-            if not include_dir:
-                existing_state.setdefault('omitted_dirs', []).append(rel_path)
-                dirs[:] = []
-                continue
-            existing_state.setdefault('processed_dirs', []).append(rel_path)
+        # Remove ignored directories
+        dirs[:] = [d for d in dirs if not is_ignored(os.path.join(rel_path, d), gitignore_patterns)]
 
         for file in files:
             file_path = os.path.join(rel_path, file)
-            if is_ignored(file_path, gitignore_patterns) or file == '__init__.py':
+            if (is_ignored(file_path, gitignore_patterns) or
+                file.startswith('.') or
+                file == '__init__.py' or
+                file == os.path.basename(state_file) or
+                file == script_name):
                 continue
 
             full_path = os.path.join(root_dir, file_path)
@@ -95,8 +68,13 @@ def select_files(root_dir, gitignore_patterns, existing_state):
                 continue
 
             if file_path not in selected_files:
-                include = input(f"Include {file_path}? (y/n): ").lower() == 'y'
-                selected_files[file_path] = include
+                new_files.append(file_path)
+
+    if new_files:
+        print("New files found:")
+        for file_path in new_files:
+            include = input(f"Include {file_path}? (y/n): ").lower() == 'y'
+            selected_files[file_path] = include
 
     return selected_files
 
@@ -107,28 +85,33 @@ def dump_files(root_dir, selected_files, output_file):
             if include:
                 full_path = os.path.join(root_dir, file_path)
                 out.write(f"{file_path}:\n")
-                with open(full_path, 'r') as f:
-                    out.write(f.read())
+                try:
+                    with open(full_path, 'r') as f:
+                        out.write(f.read())
+                except UnicodeDecodeError:
+                    out.write(f"Unable to read file: {file_path} (possibly binary)\n")
                 out.write("\n\n")
 
 
 def main():
-    current_dir = os.getcwd()
-    state_file = os.path.join(current_dir, '.file_dumper_state.json')
+    parser = argparse.ArgumentParser(description="File Dumper Script")
+    parser.add_argument("--root-dir", help="Root directory to start file dumping", default=os.getcwd())
+    parser.add_argument("--output-file", help="Output file name", default="dumped_files.txt")
+    parser.add_argument("--state-file", help="Path to state file", default=".file_dumper_state.json")
+    args = parser.parse_args()
+
+    root_dir = args.root_dir
+    output_file = args.output_file
+    state_file = args.state_file
+
     existing_state = load_state(state_file)
-
-    root_dir = existing_state.get('root_dir') or input("Enter the root directory: ")
-    output_file = os.path.join(current_dir, 'dumped_files.txt')
-
     gitignore_patterns = load_gitignore(root_dir)
 
-    selected_files = select_files(root_dir, gitignore_patterns, existing_state)
+    selected_files = select_files(root_dir, gitignore_patterns, existing_state, state_file, os.path.basename(__file__))
 
     new_state = {
         'root_dir': root_dir,
         'selected_files': selected_files,
-        'processed_dirs': existing_state.get('processed_dirs', []),
-        'omitted_dirs': existing_state.get('omitted_dirs', [])
     }
     save_state(state_file, new_state)
     dump_files(root_dir, selected_files, output_file)
