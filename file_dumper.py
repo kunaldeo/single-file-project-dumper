@@ -44,6 +44,7 @@ def save_state(state_file, state):
 
 def select_files(root_dir, gitignore_patterns, existing_state, state_file, script_name):
     selected_files = existing_state.get('selected_files', {})
+    skipped_dirs = existing_state.get('skipped_dirs', set())
     new_files = []
 
     for root, dirs, files in os.walk(root_dir, topdown=True):
@@ -51,9 +52,31 @@ def select_files(root_dir, gitignore_patterns, existing_state, state_file, scrip
         if rel_path == '.':
             rel_path = ''
 
-        # Remove ignored directories
-        dirs[:] = [d for d in dirs if not is_ignored(os.path.join(rel_path, d), gitignore_patterns)]
+        # First, handle directories
+        filtered_dirs = []
+        for d in dirs:
+            dir_path = os.path.join(rel_path, d)
+            
+            # Skip already ignored directories
+            if is_ignored(dir_path, gitignore_patterns):
+                continue
+                
+            # Skip previously skipped directories
+            if dir_path in skipped_dirs:
+                continue
+                
+            # Ask about new directories
+            if dir_path not in skipped_dirs:
+                include = input(f"Include directory '{dir_path}'? (y/n): ").lower() == 'y'
+                if include:
+                    filtered_dirs.append(d)
+                else:
+                    skipped_dirs.add(dir_path)
+                    
+        # Update dirs in-place to only process chosen directories
+        dirs[:] = filtered_dirs
 
+        # Now handle files in included directories
         for file in files:
             file_path = os.path.join(rel_path, file)
             if (is_ignored(file_path, gitignore_patterns) or
@@ -71,12 +94,12 @@ def select_files(root_dir, gitignore_patterns, existing_state, state_file, scrip
                 new_files.append(file_path)
 
     if new_files:
-        print("New files found:")
+        print("\nNew files found:")
         for file_path in new_files:
             include = input(f"Include {file_path}? (y/n): ").lower() == 'y'
             selected_files[file_path] = include
 
-    return selected_files
+    return selected_files, skipped_dirs
 
 
 def dump_files(root_dir, selected_files, output_file):
@@ -107,15 +130,16 @@ def main():
     existing_state = load_state(state_file)
     gitignore_patterns = load_gitignore(root_dir)
 
-    selected_files = select_files(root_dir, gitignore_patterns, existing_state, state_file, os.path.basename(__file__))
+    selected_files, skipped_dirs = select_files(root_dir, gitignore_patterns, existing_state, state_file, os.path.basename(__file__))
 
     new_state = {
         'root_dir': root_dir,
         'selected_files': selected_files,
+        'skipped_dirs': list(skipped_dirs)  # Convert set to list for JSON serialization
     }
     save_state(state_file, new_state)
     dump_files(root_dir, selected_files, output_file)
-    print(f"Files dumped to {output_file}")
+    print(f"\nFiles dumped to {output_file}")
 
 
 if __name__ == "__main__":
