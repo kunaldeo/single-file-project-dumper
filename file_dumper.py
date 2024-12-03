@@ -59,15 +59,20 @@ def select_files(root_dir, gitignore_patterns, existing_state, state_file, scrip
     selected_dirs = existing_state.get('selected_dirs', set())
     new_files = []
 
-    for root, dirs, files in os.walk(root_dir, topdown=True):
-        rel_path = os.path.relpath(root, root_dir)
+    # Get the absolute path of root_dir for proper relative path calculation
+    abs_root_dir = os.path.abspath(root_dir)
+
+    for root, dirs, files in os.walk(abs_root_dir, topdown=True):
+        # Calculate relative path from the root directory
+        rel_path = os.path.relpath(root, abs_root_dir)
         if rel_path == '.':
             rel_path = ''
 
         # First, handle directories
         filtered_dirs = []
         for d in dirs:
-            dir_path = os.path.join(rel_path, d)
+            dir_path = os.path.normpath(os.path.join(rel_path, d))
+            full_dir_path = os.path.normpath(os.path.join(abs_root_dir, dir_path))
             
             # Skip already ignored directories
             if is_ignored(dir_path, gitignore_patterns):
@@ -82,7 +87,7 @@ def select_files(root_dir, gitignore_patterns, existing_state, state_file, scrip
                 filtered_dirs.append(d)
                 continue
                 
-            # Ask about new directories
+            # Ask about new directories with relative path
             include = input(f"Include directory '{dir_path}'? (y/n): ").lower() == 'y'
             if include:
                 filtered_dirs.append(d)
@@ -95,7 +100,7 @@ def select_files(root_dir, gitignore_patterns, existing_state, state_file, scrip
 
         # Now handle files in included directories
         for file in files:
-            file_path = os.path.join(rel_path, file)
+            file_path = os.path.normpath(os.path.join(rel_path, file))
             if (is_ignored(file_path, gitignore_patterns) or
                 file.startswith('.') or
                 file == '__init__.py' or
@@ -103,7 +108,7 @@ def select_files(root_dir, gitignore_patterns, existing_state, state_file, scrip
                 file == script_name):
                 continue
 
-            full_path = os.path.join(root_dir, file_path)
+            full_path = os.path.join(abs_root_dir, file_path)
             if os.path.getsize(full_path) == 0:
                 continue
 
@@ -113,7 +118,8 @@ def select_files(root_dir, gitignore_patterns, existing_state, state_file, scrip
     if new_files:
         print("\nNew files found:")
         for file_path in new_files:
-            include = input(f"Include {file_path}? (y/n): ").lower() == 'y'
+            # Show relative path when asking about files
+            include = input(f"Include '{file_path}'? (y/n): ").lower() == 'y'
             selected_files[file_path] = include
 
     return selected_files, skipped_dirs, selected_dirs
