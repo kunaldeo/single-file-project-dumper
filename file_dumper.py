@@ -183,7 +183,7 @@ def dump_files(root_dir, selected_files, output_file):
 def main():
     parser = argparse.ArgumentParser(description="File Dumper Script")
     parser.add_argument("--root-dir", help="Root directory to start file dumping", default=os.getcwd())
-    parser.add_argument("--output-file", help="Output file name", default="dumped_files.txt")
+    parser.add_argument("--output-file", help="Output file name", default="project_code.txt")
     parser.add_argument("--state-file", help="Path to state file", default=".file_dumper_state.json")
     args = parser.parse_args()
 
