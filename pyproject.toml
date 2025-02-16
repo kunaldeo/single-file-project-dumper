@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "project_dumper"
+version = "0.1.0"
+description = "A tool to create single-file dumps of projects with gitignore support"
+readme = "README.md"
+requires-python = ">=3.7"
+license = "MIT"
+authors = [
+    { name = "Kunal Deo", email = "kunaldeo@gmail.com" }
+]
+dependencies = [
+    "pybars3>=0.9.7",
+]
+
+[project.scripts]
+project-dumper = "project_dumper.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["project_dumper"]
