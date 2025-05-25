@@ -324,7 +324,6 @@ def select_files(root_dir: str, gitignore_patterns: List[str],
             if (is_ignored(file_path, gitignore_patterns) or
                 file in ignore_files or
                 file.startswith('.') or
-                file == '__init__.py' or
                 os.path.getsize(os.path.join(root_dir, file_path)) == 0):
                 continue
                 
