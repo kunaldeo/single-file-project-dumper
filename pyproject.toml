@@ -4,17 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "project_dumper"
-version = "0.1.0"
-description = "A tool to create single-file dumps of projects with gitignore support"
+version = "0.2.0"
+description = "A smart tool to create LLM-optimized dumps of your codebase with token counting and interactive editing"
 readme = "README.md"
 requires-python = ">=3.7"
 license = "MIT"
 authors = [
     { name = "Kunal Deo", email = "kunaldeo@gmail.com" }
 ]
-dependencies = [
-    "pybars3>=0.9.7",
-]
+dependencies = []
 
 [project.scripts]
 project-dumper = "project_dumper.__main__:main"
