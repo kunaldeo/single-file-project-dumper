@@ -1,9 +1,0 @@
-{
-  "root_dir": "test_project",
-  "selected_files": {
-    "hello.py": true,
-    "README.md": true
-  },
-  "skipped_dirs": [],
-  "selected_dirs": []
-}
