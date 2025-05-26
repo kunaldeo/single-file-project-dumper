@@ -15,6 +15,53 @@ from .interactive import interactive_edit_mode, copy_to_clipboard
 from .template import load_template, render_template
 from .ui_utils import print_status, prompt_yes_no, colored, Colors, print_progress
 from .features import create_dump_manifest, export_to_formats
+from .preferences import load_preferences, save_preferences, add_recent_project
+
+
+def auto_select_files(root_dir: str, gitignore_patterns: List[str], 
+                     script_name: str, output_file: str, 
+                     include_patterns: Optional[List[str]] = None,
+                     max_file_size_kb: int = 1000) -> Dict[str, bool]:
+    """Automatically select files based on patterns without prompting."""
+    selected_files = {}
+    ignore_files = [script_name, os.path.basename(output_file)]
+    
+    for root, dirs, files in os.walk(root_dir, topdown=True):
+        rel_path = os.path.relpath(root, root_dir)
+        if rel_path == '.':
+            rel_path = ''
+            
+        # Filter directories based on gitignore
+        dirs[:] = [d for d in dirs if not is_ignored(
+            os.path.normpath(os.path.join(rel_path, d)), gitignore_patterns)]
+        
+        # Process files
+        for file in files:
+            file_path = os.path.normpath(os.path.join(rel_path, file))
+            full_file_path = os.path.join(root_dir, file_path)
+            
+            try:
+                file_size = os.path.getsize(full_file_path)
+            except:
+                continue
+                
+            # Skip files based on criteria
+            if (is_ignored(file_path, gitignore_patterns) or
+                file in ignore_files or
+                file.startswith('.') or
+                file_size == 0 or
+                file_size > max_file_size_kb * 1024):
+                continue
+                
+            # Check include patterns if specified
+            if include_patterns:
+                if any(fnmatch.fnmatch(file_path, pattern) for pattern in include_patterns):
+                    selected_files[file_path] = True
+            else:
+                # Include by default if no patterns specified
+                selected_files[file_path] = True
+                
+    return selected_files
 
 
 def select_files(root_dir: str, gitignore_patterns: List[str], 
@@ -184,13 +231,18 @@ def dump_files_with_template(root_dir: str, selected_files: Dict[str, bool],
 
 
 def main():
-    parser = argparse.ArgumentParser(description="File Dumper Script")
+    parser = argparse.ArgumentParser(
+        description="File Dumper Script - Automatically generates a code dump of your project. "
+                    "Runs in automatic mode by default, use --interactive for manual file selection."
+    )
     parser.add_argument("root_dir", nargs='?', help="Root directory to start file dumping",
                        default=os.getcwd())
     parser.add_argument("--output-file", help="Output file name")
     parser.add_argument("--state-file", help="Path to state file")
     parser.add_argument("--edit", action="store_true", 
                        help="Jump directly to edit mode with existing state")
+    parser.add_argument("--interactive", "-i", action="store_true",
+                       help="Run in interactive mode for manual file selection")
     parser.add_argument("--include", help="Include files matching pattern", action="append")
     parser.add_argument("--exclude", help="Exclude files matching pattern", action="append")
     parser.add_argument("--max-file-size", type=int, help="Maximum file size in KB")
@@ -224,48 +276,91 @@ def main():
     exclude_patterns = args.exclude or config.get('exclude', [])
     template_path = args.template or config.get('template')
     
-    # Welcome message
-    print_status(f"Starting project dumper in {colored(root_dir, Colors.CYAN, bold=True)}", "info")
-
-    existing_state = load_state(state_file)
-    gitignore_patterns = load_gitignore(root_dir)
+    # Check if this is first run
+    prefs = load_preferences()
+    is_first_run = root_dir not in prefs.get('recent_projects', [])
     
-    # Add custom exclude patterns
+    # Decide whether to run interactively
+    # Only run interactive if explicitly requested with --interactive flag
+    run_interactive = args.interactive
+    
+    # Add to recent projects
+    add_recent_project(root_dir)
+    
+    # Load gitignore patterns
+    gitignore_patterns = load_gitignore(root_dir)
     if exclude_patterns:
         gitignore_patterns.extend(exclude_patterns)
     
-    # Show project type detection if not in config
-    if not config.get('project_type'):
-        detected_type = detect_project_type(root_dir)
+    # Apply smart defaults based on project type
+    detected_type = detect_project_type(root_dir)
+    if detected_type and not config.get('project_type'):
+        smart = get_smart_defaults(detected_type)
+        if not args.include:
+            include_patterns = smart.get('include', [])
+        if not args.exclude:
+            gitignore_patterns.extend(smart.get('exclude', []))
+        if not args.max_file_size:
+            max_file_size = smart.get('max_file_size', 1000)
+    
+    if run_interactive:
+        # Interactive mode
+        print_status(f"Starting interactive mode in {colored(root_dir, Colors.CYAN, bold=True)}", "info")
+        
         if detected_type:
             print_status(f"Detected project type: {colored(detected_type, Colors.GREEN, bold=True)}", "info")
             use_defaults = prompt_yes_no("Use smart defaults for this project type?", default=True)
-            if use_defaults:
-                smart = get_smart_defaults(detected_type)
-                if not args.include:
-                    include_patterns = smart.get('include', [])
-                if not args.exclude:
-                    gitignore_patterns.extend(smart.get('exclude', []))
-                if not args.max_file_size:
-                    max_file_size = smart.get('max_file_size', 1000)
-
-    if args.edit and existing_state.get('selected_files'):
-        # Jump to edit mode with existing state
-        selected_files = existing_state['selected_files']
-        skipped_dirs = existing_state.get('skipped_dirs', set())
-        selected_dirs = existing_state.get('selected_dirs', set())
-    else:
-        # Normal flow - select files first
-        selected_files, skipped_dirs, selected_dirs = select_files(
-            root_dir, gitignore_patterns, existing_state, state_file,
-            os.path.basename(__file__), output_file, include_patterns, max_file_size
+            if not use_defaults:
+                # Reset to basic patterns if user doesn't want smart defaults
+                include_patterns = args.include or []
+                gitignore_patterns = load_gitignore(root_dir)
+                if exclude_patterns:
+                    gitignore_patterns.extend(exclude_patterns)
+        
+        existing_state = load_state(state_file)
+        
+        if args.edit and existing_state.get('selected_files'):
+            # Jump to edit mode with existing state
+            selected_files = existing_state['selected_files']
+            skipped_dirs = existing_state.get('skipped_dirs', set())
+            selected_dirs = existing_state.get('selected_dirs', set())
+        else:
+            # Interactive file selection
+            selected_files, skipped_dirs, selected_dirs = select_files(
+                root_dir, gitignore_patterns, existing_state, state_file,
+                os.path.basename(__file__), output_file, include_patterns, max_file_size
+            )
+        
+        # Enter interactive edit mode
+        selected_files, should_save = interactive_edit_mode(
+            root_dir, selected_files, skipped_dirs, selected_dirs, 
+            gitignore_patterns, output_file
         )
-    
-    # Enter interactive edit mode
-    selected_files, should_save = interactive_edit_mode(
-        root_dir, selected_files, skipped_dirs, selected_dirs, 
-        gitignore_patterns, output_file
-    )
+    else:
+        # Non-interactive mode - auto select and dump
+        print_status(f"Generating dump for {colored(root_dir, Colors.CYAN, bold=True)}", "info")
+        
+        if is_first_run:
+            print_status("First time dumping this project. Use --interactive for manual file selection", "info")
+        
+        if detected_type:
+            print_status(f"Using {colored(detected_type, Colors.GREEN, bold=True)} defaults", "info")
+        
+        # Auto-select files
+        selected_files = auto_select_files(
+            root_dir, gitignore_patterns, os.path.basename(__file__), 
+            output_file, include_patterns, max_file_size
+        )
+        
+        if not selected_files:
+            print_status("No files found matching criteria", "warning")
+            print_status("Try running with --interactive flag to manually select files", "info")
+            return
+            
+        print_status(f"Found {colored(str(len(selected_files)), Colors.GREEN)} files to dump", "info")
+        should_save = True
+        skipped_dirs = set()
+        selected_dirs = set()
     
     if should_save:
         new_state = {
