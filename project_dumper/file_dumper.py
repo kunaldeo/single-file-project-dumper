@@ -254,6 +254,8 @@ def main():
                        help="Create a manifest file with dump metadata")
     parser.add_argument("--format", choices=["markdown", "json", "html"],
                        help="Export to additional formats")
+    parser.add_argument("--reset", action="store_true",
+                       help="Clear saved file selections and start fresh")
     
     args = parser.parse_args()
 
@@ -275,6 +277,11 @@ def main():
     include_patterns = args.include or config.get('include', [])
     exclude_patterns = args.exclude or config.get('exclude', [])
     template_path = args.template or config.get('template')
+    
+    # Handle --reset flag
+    if args.reset and os.path.exists(state_file):
+        os.remove(state_file)
+        print_status("Cleared saved file selections", "success")
     
     # Check if this is first run
     prefs = load_preferences()
@@ -337,30 +344,53 @@ def main():
             gitignore_patterns, output_file
         )
     else:
-        # Non-interactive mode - auto select and dump
+        # Non-interactive mode - use saved state if available, otherwise auto select
         print_status(f"Generating dump for {colored(root_dir, Colors.CYAN, bold=True)}", "info")
         
-        if is_first_run:
-            print_status("First time dumping this project. Use --interactive for manual file selection", "info")
+        # Check for existing state from previous interactive session
+        existing_state = load_state(state_file)
         
-        if detected_type:
-            print_status(f"Using {colored(detected_type, Colors.GREEN, bold=True)} defaults", "info")
-        
-        # Auto-select files
-        selected_files = auto_select_files(
-            root_dir, gitignore_patterns, os.path.basename(__file__), 
-            output_file, include_patterns, max_file_size
-        )
-        
-        if not selected_files:
-            print_status("No files found matching criteria", "warning")
-            print_status("Try running with --interactive flag to manually select files", "info")
-            return
+        if existing_state.get('selected_files') and existing_state.get('root_dir') == root_dir:
+            # Use saved state from previous interactive session
+            print_status("Using file selection from previous interactive session", "info")
+            selected_files = existing_state['selected_files']
+            skipped_dirs = existing_state.get('skipped_dirs', set())
+            selected_dirs = existing_state.get('selected_dirs', set())
             
-        print_status(f"Found {colored(str(len(selected_files)), Colors.GREEN)} files to dump", "info")
+            # Clean up missing files from state
+            selected_files = {k: v for k, v in selected_files.items() 
+                             if v and os.path.exists(os.path.join(root_dir, k))}
+            
+            if not selected_files:
+                print_status("No valid files found in saved state", "warning")
+                print_status("Run with --interactive flag to select files", "info")
+                return
+                
+            print_status(f"Using {colored(str(len(selected_files)), Colors.GREEN)} previously selected files", "info")
+        else:
+            # No saved state - auto select files
+            if is_first_run:
+                print_status("First time dumping this project. Use --interactive for manual file selection", "info")
+            
+            if detected_type:
+                print_status(f"Using {colored(detected_type, Colors.GREEN, bold=True)} defaults", "info")
+            
+            # Auto-select files
+            selected_files = auto_select_files(
+                root_dir, gitignore_patterns, os.path.basename(__file__), 
+                output_file, include_patterns, max_file_size
+            )
+            
+            if not selected_files:
+                print_status("No files found matching criteria", "warning")
+                print_status("Try running with --interactive flag to manually select files", "info")
+                return
+                
+            print_status(f"Found {colored(str(len(selected_files)), Colors.GREEN)} files to dump", "info")
+            skipped_dirs = set()
+            selected_dirs = set()
+        
         should_save = True
-        skipped_dirs = set()
-        selected_dirs = set()
     
     if should_save:
         new_state = {
