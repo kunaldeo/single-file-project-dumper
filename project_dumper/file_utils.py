@@ -32,6 +32,54 @@ def load_gitignore(start_dir: str) -> List[str]:
     return load_ignore_files(start_dir)
 
 
+def get_source_file_extensions() -> Set[str]:
+    """Get list of common source file extensions to include."""
+    return {
+        # Common programming languages
+        'py', 'pyw', 'pyi',  # Python
+        'js', 'jsx', 'ts', 'tsx', 'mjs',  # JavaScript/TypeScript
+        'java', 'kt',  # Java/Kotlin
+        'c', 'h', 'cpp', 'hpp', 'cc', 'cxx', 'hxx',  # C/C++
+        'cs',  # C#
+        'go',  # Go
+        'rs',  # Rust
+        'php',  # PHP
+        'rb',  # Ruby
+        'swift',  # Swift
+        'scala',  # Scala
+        'm', 'mm',  # Objective-C
+        'dart',  # Dart
+        'lua',  # Lua
+        'r', 'R',  # R
+        
+        # Web and markup
+        'html', 'htm',  # HTML
+        'css', 'scss', 'sass',  # CSS
+        'vue',  # Vue
+        'md', 'markdown',  # Documentation
+        'xml', 'json', 'yaml', 'yml', 'toml',  # Config
+        'sql',  # SQL
+        
+        # Shell scripts
+        'sh', 'bash', 'zsh', 'fish',
+    }
+
+
+def is_source_file(file_path: str) -> bool:
+    """Check if a file is a source file based on extension."""
+    extension = os.path.splitext(file_path)[1].lstrip('.').lower()
+    if not extension:
+        # Check for files without extensions that are commonly source files
+        filename = os.path.basename(file_path).lower()
+        source_filenames = {
+            'makefile', 'dockerfile', 'rakefile', 'gemfile', 'podfile',
+            'readme', 'license', 'changelog', 'contributing', 'authors'
+        }
+        return filename in source_filenames
+    
+    return extension in get_source_file_extensions()
+
+
 def get_default_ignore_patterns() -> List[str]:
     """Get default patterns for directories that should always be ignored."""
     return [

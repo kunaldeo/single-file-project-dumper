@@ -6,7 +6,7 @@ from typing import Set, Dict, List, Tuple, Optional
 # Import from our new modules
 from .file_utils import (
     load_gitignore, is_ignored, generate_source_tree, 
-    wrap_code_block, format_file_size
+    wrap_code_block, format_file_size, is_source_file
 )
 from .token_utils import estimate_tokens, check_token_limits
 from .project_utils import detect_project_type, get_smart_defaults
@@ -50,7 +50,8 @@ def auto_select_files(root_dir: str, gitignore_patterns: List[str],
                 file in ignore_files or
                 file.startswith('.') or
                 file_size == 0 or
-                file_size > max_file_size_kb * 1024):
+                file_size > max_file_size_kb * 1024 or
+                not is_source_file(file_path)):
                 continue
                 
             # Check include patterns if specified
@@ -126,7 +127,8 @@ def select_files(root_dir: str, gitignore_patterns: List[str],
                 file in ignore_files or
                 file.startswith('.') or
                 file_size == 0 or
-                file_size > max_file_size_kb * 1024):
+                file_size > max_file_size_kb * 1024 or
+                not is_source_file(file_path)):
                 continue
                 
             # Check include patterns if specified
@@ -326,13 +328,19 @@ def main():
         
         existing_state = load_state(state_file)
         
+        # Validate state is for the same root directory
+        if existing_state.get('root_dir') and existing_state.get('root_dir') != root_dir:
+            print_status("State file is for different directory, starting fresh", "info")
+            existing_state = {'selected_files': {}, 'skipped_dirs': set(), 'selected_dirs': set()}
+        
+        # Always start with existing state in interactive mode, then update it
         if args.edit and existing_state.get('selected_files'):
             # Jump to edit mode with existing state
             selected_files = existing_state['selected_files']
             skipped_dirs = existing_state.get('skipped_dirs', set())
             selected_dirs = existing_state.get('selected_dirs', set())
         else:
-            # Interactive file selection
+            # Interactive file selection - preserves and updates existing state
             selected_files, skipped_dirs, selected_dirs = select_files(
                 root_dir, gitignore_patterns, existing_state, state_file,
                 os.path.basename(__file__), output_file, include_patterns, max_file_size
