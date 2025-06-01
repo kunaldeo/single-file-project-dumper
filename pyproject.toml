@@ -12,7 +12,7 @@ license = "MIT"
 authors = [
     { name = "Kunal Deo", email = "kunaldeo@gmail.com" }
 ]
-dependencies = []
+dependencies = ["rich>=10.0.0"]
 
 [project.scripts]
 project-dumper = "project_dumper.__main__:main"

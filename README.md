@@ -21,8 +21,13 @@ A powerful tool for creating comprehensive, LLM-optimized documentation from you
 - **Preview Mode**: Review output before saving with token usage breakdown
 
 ## Installation
+
+Clone the repository and install using pipx:
+
 ```bash
-pipx install project-dumper
+git clone https://github.com/kunaldeo/single-file-project-dumper
+cd single-file-project-dumper
+pipx install . --force
 ```
 
 ## Usage
@@ -45,37 +50,111 @@ project-dumper --init
 ```
 
 ### Command-Line Options
+
+#### Quick Reference (Short Options)
 ```bash
-# Output options
-project-dumper --output-file output.txt     # Specify output file (default: project_code.txt)
-project-dumper --format json                # Export format: markdown, json, html
-project-dumper --template custom.hbs        # Use custom Handlebars template
-
-# Configuration options
-project-dumper --state-file .my-state.json  # Custom state file location
-project-dumper --manifest manifest.json     # Generate manifest with metadata
-
-# Initialize configuration
-project-dumper --init                       # Create .claude-dump with smart defaults
+project-dumper -s              # Open state editor (visual file selector)
+project-dumper -e              # Edit mode (load previous selections)
+project-dumper -i              # Interactive mode (state editor + advanced options)
+project-dumper -o dump.txt     # Set output file
+project-dumper -f json         # Set format (markdown/json/html)
+project-dumper -c              # Copy output to clipboard
+project-dumper -r              # Reset saved selections
 ```
 
-## Interactive Mode Features
+#### Complete Options List
 
-When you run `project-dumper`, you'll enter an interactive mode with:
+**File Selection Modes**
+```bash
+-s, --state-editor     # Visual tree-based file selector with keyboard navigation
+-e, --edit            # Open state editor with previously saved selections
+-i, --interactive     # Combine visual selection with advanced management options
+```
 
-- **Color-coded file tree** with size information
-- **Token usage visualization** with model-specific counts
-- **Quick summary** showing total files, size, and token usage
-- **Pattern-based operations** for bulk selection
-- **Related file detection** for comprehensive context
-- **Preview before export** with per-file token breakdown
+**Output Options**
+```bash
+-o, --output-file FILE     # Specify output filename (default: project_code.txt)
+-f, --format FORMAT        # Export format: markdown, json, or html
+-t, --template FILE        # Use custom Handlebars template for output
+-c, --copy                 # Copy output to clipboard after generation
+```
 
-### Interactive Commands
-- `Space`: Toggle file/directory selection
-- `Enter`: Confirm and generate output
-- `q`: Quit without saving
-- `p`: Preview output
-- `s`: Quick summary view
+**Configuration Options**
+```bash
+--init                     # Initialize .claude-dump config with smart defaults
+--state-file FILE          # Custom state file location (default: .file_dumper_state.json)
+--manifest                 # Generate manifest file with dump metadata
+-r, --reset               # Clear all saved file selections and start fresh
+```
+
+**Filtering Options**
+```bash
+--include PATTERN          # Include files matching pattern (can use multiple times)
+--exclude PATTERN          # Exclude files matching pattern (can use multiple times)
+-m, --max-file-size KB    # Maximum file size in kilobytes (default: 1000)
+```
+
+#### Common Usage Examples
+```bash
+# Quick visual file selection
+project-dumper -s
+
+# Edit previous selection and copy to clipboard
+project-dumper -e -c
+
+# Generate JSON output with custom filename
+project-dumper -f json -o api-docs.json
+
+# Reset and start fresh selection
+project-dumper -r -s
+
+# Include only Python files under 500KB
+project-dumper --include "*.py" -m 500
+```
+
+## File Selection Modes
+
+Project Dumper offers three ways to select files:
+
+### 1. Automatic Mode (Default)
+```bash
+project-dumper
+```
+Automatically selects files based on smart project detection and saved state. Only includes source code files (Python, JavaScript, TypeScript, Rust, Go, Java, C++, Ruby, PHP, Swift, Kotlin, Scala, and configuration files).
+
+### 2. State Editor (Visual Tree Mode)
+```bash
+project-dumper --state-editor
+```
+Visual tree-based file browser with:
+- **Hierarchical file tree** display showing only source files
+- **Real-time navigation** with arrow keys or vim keys (j/k)
+- **Directory expansion/collapse** with Enter
+- **Visual selection indicators** with checkmarks and colors
+- **Bulk directory selection** - selecting a directory selects all source files within
+- **Dark terminal optimized** color scheme
+- **Source file filtering** - only shows relevant code files
+
+#### State Editor Controls
+- `↑/↓` or `j/k`: Navigate up/down
+- `Space`: Select/deselect current file or directory
+- `Enter`: Expand/collapse directories
+- `q`: Save selections and generate dump
+- `Ctrl+C`: Cancel (exit without saving)
+
+### 3. Interactive Mode
+```bash
+project-dumper --interactive
+```
+Combines visual file selection with advanced management options:
+- **State editor** for initial file selection
+- **Interactive edit mode** with pattern-based operations, token analysis, preview, and export options
+
+#### Edit Mode
+```bash
+project-dumper --edit
+```
+Opens the state editor with previously saved file selections pre-loaded for quick editing.
 
 ## Configuration
 
@@ -141,10 +220,15 @@ Automatically detects and optimizes for:
 ## Best Practices
 
 1. **Initialize project config**: Run `project-dumper --init` for optimal defaults
-2. **Review token usage**: Check token counts before sending to LLMs
-3. **Use manifests**: Generate manifests for tracking changes over time
-4. **Leverage patterns**: Use glob patterns for efficient bulk selection
-5. **Preview first**: Always preview output for large projects
+2. **Choose the right selection mode**:
+   - Use **automatic mode** for quick, repeated dumps with smart defaults
+   - Use **state editor** for visual file exploration and simple selection
+   - Use **interactive mode** for advanced operations (patterns, previews, token analysis)
+   - Use **edit mode** to quickly modify previously saved selections
+3. **Review token usage**: Check token counts before sending to LLMs
+4. **Use manifests**: Generate manifests for tracking changes over time
+5. **Leverage patterns**: Use glob patterns for efficient bulk selection
+6. **Preview first**: Always preview output for large projects
 
 ## Notes
 - Binary files are automatically skipped
